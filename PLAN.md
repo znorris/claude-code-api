@@ -667,6 +667,7 @@ VS Code AI extensions will work perfectly with our API:
 - **Function calling support** 🚫 **BLOCKED BY CLI** - Requires tool_use content blocks
 - Enhanced streaming with heartbeat
 - Better error recovery and fallback logging
+- **Enhanced HTTP server logging** - Improve request/response logging for debugging and monitoring
 
 ### **Phase 3: Anthropic API Compatibility**
 - `/v1/messages` endpoint (direct Claude API format)
