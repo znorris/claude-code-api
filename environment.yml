@@ -1,0 +1,17 @@
+name: claude-code-api
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - fastapi>=0.104.0
+    - uvicorn[standard]>=0.24.0
+    - pydantic>=2.5.0
+    - aiosqlite>=0.19.0
+    - pytest>=7.4.0
+    - pytest-asyncio>=0.21.0
+    - httpx>=0.25.0
+    - black>=23.0.0
+    - ruff>=0.1.0
