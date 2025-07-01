@@ -129,3 +129,53 @@ async def test_different_parameters(client):
     data = response.json()
     assert data["model"] == "claude-sonnet"
     assert data["choices"][0]["message"]["content"]
+
+@pytest.mark.asyncio
+async def test_session_persistence(client):
+    # First call - create session
+    response1 = await client.post("/v1/chat/completions", json={
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": "My name is Alice"}]
+    })
+    assert response1.status_code == 200
+    session_id = response1.headers.get("X-Session-ID")
+    assert session_id is not None
+    
+    # Second call - use session
+    response2 = await client.post("/v1/chat/completions", 
+        headers={"X-Session-ID": session_id},
+        json={
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": "What is my name?"}]
+        }
+    )
+    assert response2.status_code == 200
+    assert response2.headers.get("X-Session-ID") == session_id
+    
+    # Verify response shows awareness of previous context
+    data = response2.json()
+    content = data["choices"][0]["message"]["content"].lower()
+    assert "alice" in content
+
+@pytest.mark.asyncio
+async def test_session_creation_without_header(client):
+    response = await client.post("/v1/chat/completions", json={
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": "Hello"}]
+    })
+    assert response.status_code == 200
+    assert "X-Session-ID" in response.headers
+
+@pytest.mark.asyncio
+async def test_invalid_session_id(client):
+    response = await client.post("/v1/chat/completions",
+        headers={"X-Session-ID": "invalid-uuid"},
+        json={
+            "model": "gpt-3.5-turbo", 
+            "messages": [{"role": "user", "content": "Hello"}]
+        }
+    )
+    assert response.status_code == 200
+    # Should create new session if invalid ID provided
+    new_session_id = response.headers.get("X-Session-ID")
+    assert new_session_id != "invalid-uuid"

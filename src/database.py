@@ -5,6 +5,11 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 
+try:
+    from .models.openai import ChatMessage
+except ImportError:
+    from models.openai import ChatMessage
+
 DATABASE_PATH = "sessions.db"
 
 class DatabaseManager:
@@ -63,7 +68,7 @@ class SessionService:
         
         return session_id
     
-    async def get_session_messages(self, session_id: str) -> List[Dict[str, Any]]:
+    async def get_session_messages(self, session_id: str) -> List[ChatMessage]:
         async with self.db_manager.get_db() as db:
             await db.execute(
                 "UPDATE sessions SET last_accessed = CURRENT_TIMESTAMP WHERE id = ?",
@@ -77,7 +82,7 @@ class SessionService:
             rows = await cursor.fetchall()
             await db.commit()
             
-            return [{"role": row["role"], "content": row["content"]} for row in rows]
+            return [ChatMessage(role=row["role"], content=row["content"]) for row in rows]
     
     async def add_message(self, session_id: str, role: str, content: str):
         async with self.db_manager.get_db() as db:

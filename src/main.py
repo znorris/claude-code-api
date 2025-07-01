@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+import time
 
 try:
     from .database import db_manager, session_service
@@ -33,6 +34,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    logger.info(f"Incoming request: {request.method} {request.url.path}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    logger.info(f"Response: {response.status_code} in {process_time:.2f}s")
+    return response
 
 app.include_router(openai_router)
 
