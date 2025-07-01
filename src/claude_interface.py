@@ -187,12 +187,37 @@ class ClaudeCodeInterface:
         # Convert user message content to Claude format (handles images)
         claude_content = await self._convert_content_to_claude_format(latest_user_message.content)
         
+        # Claude Code CLI limitation: only supports single content block per message
+        # If we have multiple blocks, we need to handle this
+        if len(claude_content) > 1:
+            # Strategy: Combine text blocks and keep only one image (if any)
+            combined_text = ""
+            image_block = None
+            
+            for block in claude_content:
+                if block["type"] == "text":
+                    combined_text += block["text"] + " "
+                elif block["type"] == "image" and image_block is None:
+                    image_block = block
+            
+            # Prefer image with combined text, or just combined text
+            if image_block and combined_text.strip():
+                # For now, just send the image and log the text limitation
+                logger.warning(f"Claude CLI limitation: Sending image only, text was: {combined_text.strip()}")
+                final_content = [image_block]
+            elif image_block:
+                final_content = [image_block]
+            else:
+                final_content = [{"type": "text", "text": combined_text.strip()}]
+        else:
+            final_content = claude_content
+        
         # Build user message with optional system prompt
         user_obj = {
             "type": "user",
             "message": {
                 "role": "user",
-                "content": claude_content
+                "content": final_content
             }
         }
         

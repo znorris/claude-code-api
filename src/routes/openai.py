@@ -98,7 +98,23 @@ async def complete_chat_with_session(
     
     # Save new messages to session
     for msg in request.messages:
-        await session_service.add_message(session_id, msg.role, msg.content)
+        # Convert content to string for database storage
+        if isinstance(msg.content, list):
+            # Extract text content for storage (images can't be stored as text)
+            content_text = ""
+            for item in msg.content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    content_text += item.get("text", "")
+                elif hasattr(item, 'type') and item.type == "text":
+                    content_text += item.text
+                elif isinstance(item, dict) and item.get("type") == "image_url":
+                    content_text += "[Image]"
+                elif hasattr(item, 'type') and item.type == "image_url":
+                    content_text += "[Image]"
+            content_for_storage = content_text or "[Mixed Content]"
+        else:
+            content_for_storage = msg.content
+        await session_service.add_message(session_id, msg.role, content_for_storage)
     await session_service.add_message(session_id, "assistant", result.get("result", ""))
     
     # Create response (existing logic)
@@ -191,7 +207,23 @@ async def stream_chat_completion_with_session(
         
         # Save to session after streaming completes
         for msg in request.messages:
-            await session_service.add_message(session_id, msg.role, msg.content)
+            # Convert content to string for database storage
+            if isinstance(msg.content, list):
+                # Extract text content for storage (images can't be stored as text)
+                content_text = ""
+                for item in msg.content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        content_text += item.get("text", "")
+                    elif hasattr(item, 'type') and item.type == "text":
+                        content_text += item.text
+                    elif isinstance(item, dict) and item.get("type") == "image_url":
+                        content_text += "[Image]"
+                    elif hasattr(item, 'type') and item.type == "image_url":
+                        content_text += "[Image]"
+                content_for_storage = content_text or "[Mixed Content]"
+            else:
+                content_for_storage = msg.content
+            await session_service.add_message(session_id, msg.role, content_for_storage)
         await session_service.add_message(session_id, "assistant", content_buffer)
         
     except Exception as e:
