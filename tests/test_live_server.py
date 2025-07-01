@@ -33,7 +33,7 @@ async def test_openapi_docs(client):
 @pytest.mark.asyncio
 async def test_chat_completions_live(client):
     request_data = {
-        "model": "gpt-3.5-turbo",
+        "model": "sonnet",
         "messages": [
             {"role": "user", "content": "Say hello in one word"}
         ],
@@ -45,7 +45,7 @@ async def test_chat_completions_live(client):
     
     data = response.json()
     assert data["object"] == "chat.completion"
-    assert data["model"] == "gpt-3.5-turbo"
+    assert data["model"] == "sonnet"
     assert len(data["choices"]) == 1
     assert data["choices"][0]["message"]["role"] == "assistant"
     assert data["choices"][0]["message"]["content"]
@@ -55,7 +55,7 @@ async def test_chat_completions_live(client):
 @pytest.mark.asyncio
 async def test_chat_completions_streaming_live(client):
     request_data = {
-        "model": "gpt-3.5-turbo",
+        "model": "sonnet",
         "messages": [
             {"role": "user", "content": "Count to 3"}
         ],
@@ -80,12 +80,12 @@ async def test_chat_completions_streaming_live(client):
         assert len(chunks) > 0
         first_chunk = chunks[0]
         assert first_chunk["object"] == "chat.completion.chunk"
-        assert first_chunk["model"] == "gpt-3.5-turbo"
+        assert first_chunk["model"] == "sonnet"
 
 @pytest.mark.asyncio
 async def test_chat_completions_validation_error_live(client):
     request_data = {
-        "model": "gpt-3.5-turbo",
+        "model": "sonnet",
         "messages": [],
         "temperature": 3.0
     }
@@ -102,7 +102,7 @@ async def test_conversation_with_context(client):
     ]
     
     request_data = {
-        "model": "gpt-3.5-turbo",
+        "model": "sonnet",
         "messages": messages,
         "max_tokens": 20
     }
@@ -116,7 +116,7 @@ async def test_conversation_with_context(client):
 @pytest.mark.asyncio
 async def test_different_parameters(client):
     request_data = {
-        "model": "claude-sonnet",
+        "model": "opus",
         "messages": [{"role": "user", "content": "Hello"}],
         "temperature": 0.5,
         "max_tokens": 50,
@@ -127,14 +127,14 @@ async def test_different_parameters(client):
     assert response.status_code == 200
     
     data = response.json()
-    assert data["model"] == "claude-sonnet"
+    assert data["model"] == "opus"
     assert data["choices"][0]["message"]["content"]
 
 @pytest.mark.asyncio
 async def test_session_persistence(client):
     # First call - create session
     response1 = await client.post("/v1/chat/completions", json={
-        "model": "gpt-3.5-turbo",
+        "model": "sonnet",
         "messages": [{"role": "user", "content": "My name is Alice"}]
     })
     assert response1.status_code == 200
@@ -145,7 +145,7 @@ async def test_session_persistence(client):
     response2 = await client.post("/v1/chat/completions", 
         headers={"X-Session-ID": session_id},
         json={
-            "model": "gpt-3.5-turbo",
+            "model": "sonnet",
             "messages": [{"role": "user", "content": "What is my name?"}]
         }
     )
@@ -160,7 +160,7 @@ async def test_session_persistence(client):
 @pytest.mark.asyncio
 async def test_session_creation_without_header(client):
     response = await client.post("/v1/chat/completions", json={
-        "model": "gpt-3.5-turbo",
+        "model": "sonnet",
         "messages": [{"role": "user", "content": "Hello"}]
     })
     assert response.status_code == 200
@@ -171,7 +171,7 @@ async def test_invalid_session_id(client):
     response = await client.post("/v1/chat/completions",
         headers={"X-Session-ID": "invalid-uuid"},
         json={
-            "model": "gpt-3.5-turbo", 
+            "model": "sonnet", 
             "messages": [{"role": "user", "content": "Hello"}]
         }
     )
@@ -179,3 +179,60 @@ async def test_invalid_session_id(client):
     # Should create new session if invalid ID provided
     new_session_id = response.headers.get("X-Session-ID")
     assert new_session_id != "invalid-uuid"
+
+@pytest.mark.asyncio
+async def test_claude_model_aliases(client):
+    # Test Claude model aliases
+    response = await client.post("/v1/chat/completions", json={
+        "model": "opus",
+        "messages": [{"role": "user", "content": "What model are you?"}]
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"] == "opus"  # Should return requested model
+    
+@pytest.mark.asyncio
+async def test_full_claude_model_names(client):
+    # Test full Claude model names
+    response = await client.post("/v1/chat/completions", json={
+        "model": "claude-sonnet-4-20250514",
+        "messages": [{"role": "user", "content": "Hello"}]
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"] == "claude-sonnet-4-20250514"
+
+@pytest.mark.asyncio  
+async def test_unsupported_model_rejection(client):
+    # Test unknown model names are rejected
+    response = await client.post("/v1/chat/completions", json={
+        "model": "unknown-model",
+        "messages": [{"role": "user", "content": "Hello"}]
+    })
+    # Should return 400 error for unsupported model
+    assert response.status_code == 400
+    data = response.json()
+    assert "not supported" in data["detail"]
+
+@pytest.mark.asyncio
+async def test_json_input_format(client):
+    # Test that JSON input format produces the same results as text input
+    request_data = {
+        "model": "sonnet",
+        "messages": [
+            {"role": "user", "content": "Say hello in one word"}
+        ],
+        "max_tokens": 10
+    }
+    
+    response = await client.post("/v1/chat/completions", json=request_data)
+    assert response.status_code == 200
+    
+    data = response.json()
+    assert data["object"] == "chat.completion"
+    assert data["model"] == "sonnet"
+    assert len(data["choices"]) == 1
+    assert data["choices"][0]["message"]["role"] == "assistant"
+    assert data["choices"][0]["message"]["content"]
+    assert data["usage"]["prompt_tokens"] > 0
+    assert data["usage"]["completion_tokens"] > 0

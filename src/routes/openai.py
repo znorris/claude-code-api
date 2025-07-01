@@ -74,6 +74,9 @@ async def chat_completions(
         else:
             return await complete_chat_with_session(request, full_messages, session_id)
             
+    except HTTPException:
+        # Re-raise HTTPExceptions (like model validation errors) without modification
+        raise
     except Exception as e:
         logger.error(f"Chat completion error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -84,7 +87,14 @@ async def complete_chat_with_session(
     session_id: str
 ) -> ChatCompletionResponse:
     
-    result = await claude_interface.complete_chat(full_messages)
+    # Get Claude CLI session ID if it exists
+    claude_session_id = await session_service.get_claude_session_id(session_id)
+    
+    result = await claude_interface.complete_chat(full_messages, request.model, claude_session_id=claude_session_id)
+    
+    # Store Claude CLI session ID if we got one
+    if result.get("claude_session_id") and not claude_session_id:
+        await session_service.set_claude_session_id(session_id, result["claude_session_id"])
     
     # Save new messages to session
     for msg in request.messages:
@@ -128,7 +138,15 @@ async def stream_chat_completion_with_session(
         response_id = f"chatcmpl-{uuid.uuid4().hex[:29]}"
         created = int(time.time())
         
-        async for chunk in claude_interface.stream_chat(full_messages):
+        # Get Claude CLI session ID if it exists  
+        claude_session_id = await session_service.get_claude_session_id(session_id)
+        claude_session_stored = False
+        
+        async for chunk in claude_interface.stream_chat(full_messages, request.model, claude_session_id=claude_session_id):
+            # Store Claude CLI session ID if we get one and haven't stored it yet
+            if not claude_session_stored and chunk.get("session_id") and not claude_session_id:
+                await session_service.set_claude_session_id(session_id, chunk["session_id"])
+                claude_session_stored = True
             if chunk.get("type") == "assistant":
                 message = chunk.get("message", {})
                 content = message.get("content", [])

@@ -21,6 +21,7 @@ class DatabaseManager:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
+                    claude_session_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP,
@@ -108,6 +109,25 @@ class SessionService:
             )
             await db.commit()
             return cursor.rowcount
+    
+    async def get_claude_session_id(self, session_id: str) -> Optional[str]:
+        """Get Claude CLI session ID for our session."""
+        async with self.db_manager.get_db() as db:
+            cursor = await db.execute(
+                "SELECT claude_session_id FROM sessions WHERE id = ?",
+                (session_id,)
+            )
+            row = await cursor.fetchone()
+            return row["claude_session_id"] if row else None
+    
+    async def set_claude_session_id(self, session_id: str, claude_session_id: str):
+        """Store Claude CLI session ID for our session."""
+        async with self.db_manager.get_db() as db:
+            await db.execute(
+                "UPDATE sessions SET claude_session_id = ? WHERE id = ?",
+                (claude_session_id, session_id)
+            )
+            await db.commit()
 
 db_manager = DatabaseManager()
 session_service = SessionService(db_manager)
