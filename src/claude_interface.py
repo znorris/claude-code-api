@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
-from typing import List, Dict, Any, AsyncIterator, Optional
+import base64
+import httpx
+from typing import List, Dict, Any, AsyncIterator, Optional, Union
 try:
     from .models.openai import ChatMessage
     from .models.config import validate_model
@@ -50,11 +52,130 @@ class ClaudeCodeInterface:
         
         return "\n\n".join(formatted_messages)
     
-    def _format_messages_as_json(self, messages: List[ChatMessage]) -> str:
+    async def _download_image_as_base64(self, url: str) -> tuple[str, str]:
+        """Download image from URL and return base64 data and media type."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                
+                # Determine media type from content-type header or URL extension
+                content_type = response.headers.get('content-type', '')
+                if content_type.startswith('image/'):
+                    media_type = content_type
+                else:
+                    # Fallback to URL extension
+                    if url.lower().endswith('.png'):
+                        media_type = 'image/png'
+                    elif url.lower().endswith('.jpg') or url.lower().endswith('.jpeg'):
+                        media_type = 'image/jpeg'
+                    elif url.lower().endswith('.gif'):
+                        media_type = 'image/gif'
+                    elif url.lower().endswith('.webp'):
+                        media_type = 'image/webp'
+                    else:
+                        media_type = 'image/jpeg'  # Default
+                
+                # Convert to base64
+                base64_data = base64.b64encode(response.content).decode('utf-8')
+                return base64_data, media_type
+                
+        except Exception as e:
+            logger.error(f"Failed to download image from {url}: {e}")
+            raise RuntimeError(f"Failed to download image: {e}")
+    
+    def _extract_base64_from_data_url(self, data_url: str) -> tuple[str, str]:
+        """Extract base64 data and media type from data URL."""
+        if not data_url.startswith('data:'):
+            raise ValueError("Invalid data URL format")
+        
+        try:
+            # Parse data:image/jpeg;base64,<data>
+            header, data = data_url.split(',', 1)
+            media_type_part = header.split(';')[0].replace('data:', '')
+            
+            # Validate media type
+            if not media_type_part.startswith('image/'):
+                raise ValueError(f"Unsupported media type: {media_type_part}")
+                
+            return data, media_type_part
+            
+        except Exception as e:
+            logger.error(f"Failed to parse data URL: {e}")
+            raise ValueError(f"Invalid data URL format: {e}")
+    
+    async def _convert_content_to_claude_format(self, content: Union[str, List]) -> List[Dict[str, Any]]:
+        """Convert OpenAI content format to Claude content blocks."""
+        if isinstance(content, str):
+            # Simple text content
+            return [{
+                "type": "text",
+                "text": content
+            }]
+        
+        # Array of content items
+        claude_content = []
+        
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") == "text":
+                    claude_content.append({
+                        "type": "text",
+                        "text": item.get("text", "")
+                    })
+                elif item.get("type") == "image_url":
+                    image_url_data = item.get("image_url", {})
+                    url = image_url_data.get("url", "")
+                    
+                    if url.startswith('data:'):
+                        # Base64 data URL
+                        base64_data, media_type = self._extract_base64_from_data_url(url)
+                    else:
+                        # HTTP/HTTPS URL - download and convert
+                        base64_data, media_type = await self._download_image_as_base64(url)
+                    
+                    claude_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": base64_data
+                        }
+                    })
+            else:
+                # Handle ContentText/ContentImageUrl objects
+                if hasattr(item, 'type'):
+                    if item.type == "text":
+                        claude_content.append({
+                            "type": "text",
+                            "text": item.text
+                        })
+                    elif item.type == "image_url":
+                        image_url_data = item.image_url
+                        url = image_url_data.get("url", "")
+                        
+                        if url.startswith('data:'):
+                            base64_data, media_type = self._extract_base64_from_data_url(url)
+                        else:
+                            base64_data, media_type = await self._download_image_as_base64(url)
+                        
+                        claude_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": base64_data
+                            }
+                        })
+        
+        return claude_content
+    
+    async def _format_messages_as_json(self, messages: List[ChatMessage]) -> str:
         """Format messages as JSON stream for Claude Code CLI."""
-        # With session management, we only send the latest user message
-        # Claude CLI will maintain conversation context via --resume
+        # Extract system messages and latest user message
+        system_messages = [msg for msg in messages if msg.role == "system"]
         latest_user_message = None
+        
         for message in reversed(messages):
             if message.role == "user":
                 latest_user_message = message
@@ -62,25 +183,43 @@ class ClaudeCodeInterface:
         
         if not latest_user_message:
             return ""
-            
-        json_obj = {
+        
+        # Convert user message content to Claude format (handles images)
+        claude_content = await self._convert_content_to_claude_format(latest_user_message.content)
+        
+        # Build user message with optional system prompt
+        user_obj = {
             "type": "user",
             "message": {
                 "role": "user",
-                "content": [{
-                    "type": "text",
-                    "text": latest_user_message.content
-                }]
+                "content": claude_content
             }
         }
-        return json.dumps(json_obj)
+        
+        # Add system message if present (use the last system message)
+        if system_messages:
+            # System message content should be text only
+            system_content = system_messages[-1].content
+            if isinstance(system_content, list):
+                # Extract text from content array if needed
+                system_text = ""
+                for item in system_content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        system_text += item.get("text", "")
+                    elif hasattr(item, 'type') and item.type == "text":
+                        system_text += item.text
+                user_obj["system"] = system_text
+            else:
+                user_obj["system"] = system_content
+            
+        return json.dumps(user_obj)
     
     async def complete_chat(self, messages: List[ChatMessage], model: str = "sonnet", use_json_input: bool = True, claude_session_id: Optional[str] = None) -> Dict[str, Any]:
         cmd = self._build_command(messages, model, stream=False, use_json_input=use_json_input, claude_session_id=claude_session_id)
         
         try:
             if use_json_input:
-                json_input = self._format_messages_as_json(messages)
+                json_input = await self._format_messages_as_json(messages)
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdin=asyncio.subprocess.PIPE,
@@ -150,7 +289,7 @@ class ClaudeCodeInterface:
         
         try:
             if use_json_input:
-                json_input = self._format_messages_as_json(messages)
+                json_input = await self._format_messages_as_json(messages)
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdin=asyncio.subprocess.PIPE,

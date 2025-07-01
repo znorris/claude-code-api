@@ -7,9 +7,19 @@ class Role(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
 
+class ContentText(BaseModel):
+    type: Literal["text"] = "text"
+    text: str
+
+class ContentImageUrl(BaseModel):
+    type: Literal["image_url"] = "image_url"
+    image_url: Dict[str, Any]  # Contains "url" and optional "detail"
+
+ContentItem = Union[ContentText, ContentImageUrl]
+
 class ChatMessage(BaseModel):
     role: Role
-    content: str
+    content: Union[str, List[ContentItem]]
     name: Optional[str] = None
 
 class ChatCompletionRequest(BaseModel):

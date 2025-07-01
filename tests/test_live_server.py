@@ -236,3 +236,84 @@ async def test_json_input_format(client):
     assert data["choices"][0]["message"]["content"]
     assert data["usage"]["prompt_tokens"] > 0
     assert data["usage"]["completion_tokens"] > 0
+
+@pytest.mark.asyncio
+async def test_system_message_support(client):
+    # Test system message functionality - verify it doesn't crash
+    request_data = {
+        "model": "sonnet",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Say hello"}
+        ],
+        "max_tokens": 50
+    }
+    
+    response = await client.post("/v1/chat/completions", json=request_data)
+    assert response.status_code == 200
+    
+    data = response.json()
+    assert data["object"] == "chat.completion"
+    assert data["model"] == "sonnet"
+    assert len(data["choices"]) == 1
+    assert data["choices"][0]["message"]["role"] == "assistant"
+    assert data["choices"][0]["message"]["content"]  # Should have content
+
+@pytest.mark.asyncio
+async def test_system_message_with_session(client):
+    # Test system message with session persistence
+    response1 = await client.post("/v1/chat/completions", json={
+        "model": "sonnet",
+        "messages": [
+            {"role": "system", "content": "You are a pirate. Always speak like a pirate."},
+            {"role": "user", "content": "Hello"}
+        ]
+    })
+    assert response1.status_code == 200
+    session_id = response1.headers.get("X-Session-ID")
+    
+    # Second call with same session - system message should persist
+    response2 = await client.post("/v1/chat/completions", 
+        headers={"X-Session-ID": session_id},
+        json={
+            "model": "sonnet",
+            "messages": [{"role": "user", "content": "How are you?"}]
+        }
+    )
+    assert response2.status_code == 200
+    data = response2.json()
+    content = data["choices"][0]["message"]["content"].lower()
+    # Should maintain pirate persona from system message
+    pirate_words = ["ahoy", "matey", "arr", "ye", "aye", "captain"]
+    assert any(word in content for word in pirate_words)
+
+@pytest.mark.asyncio
+async def test_image_input_support(client):
+    # Test image input with base64 data URL
+    # Simple 1x1 red pixel PNG
+    red_pixel_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGE4m8h1gAAAABJRU5ErkJggg=="
+    
+    request_data = {
+        "model": "sonnet",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What do you see in this image?"},
+                    {"type": "image_url", "image_url": {"url": red_pixel_png}}
+                ]
+            }
+        ],
+        "max_tokens": 100
+    }
+    
+    response = await client.post("/v1/chat/completions", json=request_data)
+    assert response.status_code == 200
+    
+    data = response.json()
+    assert data["object"] == "chat.completion"
+    assert data["model"] == "sonnet"
+    assert len(data["choices"]) == 1
+    assert data["choices"][0]["message"]["role"] == "assistant"
+    content = data["choices"][0]["message"]["content"]
+    assert content  # Should have some response about the image
