@@ -11,7 +11,7 @@
 
 **Current Status:** Phase 1.5 complete! Session persistence + model mapping + JSON input format all working.
 
-**🚨 CRITICAL DISCOVERY:** Claude Code CLI has significant limitations vs Messages API. JSON input only supports single text content blocks.
+**🚨 CRITICAL DISCOVERY:** Comprehensive testing reveals Claude CLI has severe JSON input limitations. Only 2 out of 10 claimed features actually work.
 
 ---
 
@@ -52,40 +52,45 @@ Claude Code CLI's `--input-format stream-json` accepts Messages API structure BU
 - **No tool_use/tool_result** - Same text-only restriction
 - **No multi-content messages** - Cannot mix text + images in one message
 
-### **✅ What We Actually Implemented (Phase 1.6 Results)**
+### **🔍 COMPREHENSIVE VERIFICATION RESULTS (Phase 1.6 Complete)**
 
-**1.6.1: System Messages** ✅ **COMPLETE**
-- System messages work via "system" field in JSON input  
-- Full OpenAI compatibility for system role
-- Works around CLI limitations perfectly
+After rigorous testing with 37 total test cases and behavioral verification:
 
-**1.6.2: Image Input Support** 🚫 **BLOCKED BY CLI**
-- Built full image processing infrastructure
-- OpenAI format parsing (data URLs, HTTP URLs)
-- Base64 conversion and media type detection  
-- Ready for future CLI support
+**✅ VERIFIED Working Features (Only 2 Total):**
+- **Response prefilling via `assistant_prefill`** - Actually prefills responses ✅
+- **XML tags in content** - Structured examples work ✅
 
-**1.6.3: Multi-Content Messages** ✅ **INFRASTRUCTURE COMPLETE**
-- Extended ChatMessage model for OpenAI compatibility
-- Database storage handles list content
-- Graceful degradation to text-only for CLI
-- Full parsing/validation implemented
+**❌ SYSTEM FIELD DISCOVERY:**
+- **`system` field COMPLETELY IGNORED** - No behavioral effect whatsoever
+- **Pirate test failed** - When instructed to "speak like a pirate," Claude responded normally
+- **NO system message support** - All approaches fail or are ignored
 
-**1.6.4: Tool Integration Foundation** 🚫 **BLOCKED BY CLI**
-- Cannot implement due to text-only CLI restriction
-- Would require CLI tool_use content support
+**⚠️ UNVERIFIED Claims (Commands succeed but features don't work):**
+- **`prefill` field** - Completely ignored, no prefilling occurs
+- **System messages** - Field accepted but has zero effect on behavior
+- **Extra fields** - Ignored gracefully (as expected)
 
-### **🔧 Current Technical Status:**
-- **Full OpenAI format compatibility** - Parses everything correctly
-- **Claude CLI workarounds** - Extracts text from multi-content  
-- **Future-ready architecture** - Will work when CLI adds features
-- **Graceful degradation** - No breaking changes for text-only usage
+**🚫 CONFIRMED Blocked Features:**
+- **Images/Multi-modal**: All image formats fail with "Expected string or text block"
+- **Multiple content blocks**: Error "Expected exactly one item, got 2"  
+- **Tool use/results**: Same text-only restriction
+- **Assistant/System roles**: Only user message type accepted
+- **Messages arrays**: CLI expects singular "message", not "messages"
 
-### **📊 Revised Capability Assessment:**
-- **System messages**: ✅ Working perfectly
-- **Images/Tools**: 🚫 Blocked by CLI, infrastructure ready
-- **Multi-content**: ✅ Parsed correctly, CLI gets text-only
-- **Function calling**: 🚫 Will require CLI updates
+### **🔧 CORRECTED Technical Status:**
+- **Basic text processing**: ✅ Works perfectly
+- **System message support**: ❌ **NO WORKING IMPLEMENTATION FOUND**
+- **Response prefilling**: ✅ Only `assistant_prefill` works
+- **OpenAI compatibility**: ⚠️ Limited to text-only scenarios
+- **CLI limitations**: Far more severe than initially thought
+
+### **📊 FINAL Capability Assessment:**
+- **Text conversations**: ✅ Excellent support
+- **System messages**: ❌ **NO SUPPORT** (all methods fail/ignored)
+- **Images/Tools**: ❌ Complete blocking by CLI
+- **Multi-content**: ❌ CLI restriction to single content blocks
+- **Function calling**: ❌ No tool content support
+- **Verified success rate**: **Only 20% of claimed features work**
 
 ---
 
@@ -569,16 +574,18 @@ async def test_full_integration(client):
 - ✅ Multi-turn conversations
 - ✅ Model selection
 
-### **🎯 FINAL STATUS: Phase 1.6 Complete with CLI Limitations**
-**What Actually Works:**
-- ✅ **System messages** - Full support, works perfectly
-- ✅ **Multi-content parsing** - OpenAI compatibility maintained
-- 🚫 **Images** - Blocked by CLI, infrastructure ready
-- 🚫 **Tools** - Blocked by CLI, will need future updates
+### **🎯 FINAL STATUS: Phase 1.6 Complete - CLI Severely Limited**
+**What Actually Works (Verified):**
+- ✅ **Text-only conversations** - Excellent support
+- ✅ **Response prefilling** - Only `assistant_prefill` field works
+- ✅ **XML content structure** - Structured examples understood
+- ❌ **System messages** - **NO SUPPORT** (all methods fail/ignored)
+- ❌ **Images/Tools** - Completely blocked by CLI
+- ❌ **Multi-content** - Single content block restriction
 
-**Current Capability:** Enhanced text chat API with system message support and future-ready architecture.
+**Current Capability:** Basic text chat API with very limited advanced features.
 
-**Key Insight:** Claude Code CLI is more limited than web Messages API. Our implementation provides maximum compatibility within CLI constraints.
+**Key Insight:** Claude CLI is far more limited than initially discovered. Most "working" features are just ignored fields. Only 20% of claimed functionality actually works.
 
 ---
 
@@ -662,22 +669,24 @@ VS Code AI extensions will work perfectly with our API:
 
 **Phase 1.6 Total: ~10 hours for major capability expansion**
 
-### **Phase 2: OpenAI API Completion**
-- `/v1/completions` legacy endpoint (text-only, should work with CLI)
-- **Function calling support** 🚫 **BLOCKED BY CLI** - Requires tool_use content blocks
-- Enhanced streaming with heartbeat
-- Better error recovery and fallback logging
+### **Phase 2: Enhanced Features (Within Severe CLI Limitations)**
 - **Enhanced HTTP server logging** - Improve request/response logging for debugging and monitoring
+- Enhanced streaming with heartbeat  
+- Better error recovery and fallback logging
+- **Persistent Claude CLI Process Optimization** - Keep Claude CLI running between calls, stream JSON structs for better performance
+- `/v1/completions` legacy endpoint (text-only only, due to CLI restrictions)
 
-### **Phase 3: Anthropic API Compatibility**
-- `/v1/messages` endpoint (direct Claude API format)
-- ~~Multi-content message support~~ ✅ **Moved to Phase 1.6**
-- Anthropic streaming format
-- Cross-API session management
+### **Phase 3: Anthropic API Direct Integration (Bypass CLI)**
+- **Direct Anthropic API client** - For features CLI cannot support
+- **Hybrid routing** - CLI for text-only, direct API for advanced features  
+- **Automatic fallback detection** - Route image/tool requests to direct API
+- `/v1/messages` endpoint with full Messages API support
+- Function calling via direct API calls
+- Multi-modal support via direct API calls
 
 ### **Phase 4: Production Features**
-- Configuration management
-- **Persistent Claude CLI Process Optimization** - Keep Claude CLI running between calls, stream JSON structs for better performance
+- Configuration management for dual CLI/API approach
+- Advanced routing logic (CLI vs direct API decision making)
 - Performance optimizations
 - Monitoring and health checks
 - Optional security features

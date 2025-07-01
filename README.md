@@ -6,14 +6,16 @@ HTTP server with OpenAI API compatibility that translates requests to Claude Cod
 
 This project provides a local development server that exposes OpenAI-compatible API endpoints while using Claude Code as the backend. Any OpenAI client can communicate with this server without modification.
 
-**Current Status**: Phase 1 MVP - OpenAI chat completions support
+**Current Status**: Phase 1.6 Complete - OpenAI chat completions with Claude CLI limitations documented
 
 ## Features
 
 - ✅ OpenAI `/v1/chat/completions` endpoint (streaming and non-streaming)
 - ✅ SQLite session management with conversation history
-- ✅ Claude Code subprocess integration  
-- ✅ Comprehensive test suite
+- ✅ Claude Code subprocess integration with text-only support
+- ✅ Comprehensive test suite with CLI limitations analysis
+- ✅ System message conversion (API format → CLI workarounds)
+- ⚠️ **Limited by Claude CLI JSON input restrictions** (see [Technical Limitations](#technical-limitations))
 - 🚧 Anthropic API compatibility (planned)
 - 🚧 OpenAI legacy completions endpoint (planned)
 
@@ -116,27 +118,65 @@ Session expiration: 24 hours (configurable)
 
 ## Roadmap
 
-### Phase 2: OpenAI Feature Completion
-- [ ] `/v1/completions` legacy endpoint
+### Phase 2: Enhanced Features (Within CLI Limitations)
+- [ ] Enhanced HTTP server logging
 - [ ] Enhanced streaming support
-- [ ] Function calling support
+- [ ] Performance optimization with persistent CLI processes
+- [ ] Error recovery and fallback mechanisms
 
-### Phase 3: Anthropic API Support  
-- [ ] `/v1/messages` endpoint
-- [ ] Multi-content message format
-- [ ] Anthropic streaming format
+### Phase 3: Anthropic API Fallback Integration
+- [ ] Direct Anthropic API client for advanced features
+- [ ] Automatic fallback for image/function call requests
+- [ ] `/v1/messages` endpoint with full Messages API support
+- [ ] Hybrid routing (CLI for text, API for advanced features)
 
-### Phase 4: Advanced Features
+### Phase 4: Production Features
+- [ ] `/v1/completions` legacy endpoint
 - [ ] Model parameter mapping
-- [ ] Enhanced session management
 - [ ] API key validation
 - [ ] Rate limiting
+- [ ] Enhanced session management
+
+## Technical Limitations
+
+**Important**: Claude Code CLI has significant JSON input limitations that restrict this API's capabilities:
+
+### ❌ **Not Supported** (Claude CLI Restrictions)
+- **Images/Multi-modal**: No image content blocks supported
+- **Function Calling**: No tool use/tool result content blocks  
+- **Multiple Content Blocks**: Only single text content per message
+- **Assistant/System Roles**: Only user messages accepted
+- **Conversation Arrays**: Single message per request only
+
+### ✅ **Supported** 
+- **Text-only messages**: Full text processing capabilities
+- **Large content**: 15KB+ text handling confirmed
+- **Unicode support**: Emoji, international languages
+- **Response prefilling**: Via `assistant_prefill` field (CLI-specific)
+- **Session management**: Built-in CLI session support
+
+### 🔄 **Workarounds Implemented**
+- **System messages**: Converted to text prompts (system field doesn't work)
+- **Multi-content**: Text blocks combined automatically
+- **Image requests**: Fallback to direct Anthropic API (planned)
+- **Function calls**: Fallback to direct Anthropic API (planned)
+
+For complete analysis, see: [Claude CLI vs Anthropic API Comparison](./Claude_CLI_vs_Anthropic_API_Comparison.md)
+
+## Architecture Decision
+
+This project uses a **hybrid approach**:
+- **Claude CLI**: For simple text-only conversations (cost optimization)
+- **Anthropic API**: For advanced features requiring full Messages API (planned fallback)
+
+The current implementation provides maximum compatibility within Claude CLI constraints while maintaining OpenAI API compatibility.
 
 ## Contributing
 
 1. Ensure tests pass: `python -m pytest tests/ -v`
 2. Follow existing code style
 3. Add tests for new features
+4. Run CLI limitation tests: `python comprehensive_cli_verification.py`
 
 ## License
 
